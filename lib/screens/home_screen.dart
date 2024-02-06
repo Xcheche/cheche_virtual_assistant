@@ -16,6 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final SpeechToText speechToTextInstance = SpeechToText();
   String recordedAudioString = "";
   bool isLoading = false;
+  String modeOpenAI = 'chat';
 
   void initializeSpeechToText() async {
     await speechToTextInstance.initialize();
@@ -39,9 +40,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void onSpeechToTextResult(SpeechRecognitionResult recognitionResult) {
     recordedAudioString = recognitionResult.recognizedWords;
-
+    speechToTextInstance.isListening
+        ? null
+        : sendRequestToOpenAI((recordedAudioString));
     print("Speech Result:");
     print(recordedAudioString);
+  }
+
+  Future<void> sendRequestToOpenAI(String userInput) async {
+    stopListeningNow();
+    setState(() {
+      isLoading = true;
+    });
+
+    //send request to openai
   }
 
   @override
