@@ -1,4 +1,4 @@
-name: cheche_virtual_assistant
+name: friday_virtual_assistant
 description: A new Flutter project.
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -37,6 +37,8 @@ dependencies:
   speech_to_text: ^6.6.0
   loading_animation_widget: ^1.2.0+4
   http: ^1.1.0
+  image_downloader: ^0.31.0
+  text_to_speech: ^0.2.3
 
 dev_dependencies:
   flutter_test:

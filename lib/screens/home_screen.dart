@@ -1,7 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:friday_virtual_assistant/api/api_service.dart';
+import 'package:friday_virtual_assistant/api_key.dart';
+import 'package:image_downloader/image_downloader.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:text_to_speech/text_to_speech.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,13 +16,18 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   TextEditingController userInputTextEditingController =
       TextEditingController();
   final SpeechToText speechToTextInstance = SpeechToText();
   String recordedAudioString = "";
   bool isLoading = false;
-  String modeOpenAI = 'chat';
+  bool speakFRIDAY = true;
+  String modeOpenAI = "chat";
+  String imageUrlFromOpenAI = "";
+  String answerTextFromOpenAI = "";
+  final TextToSpeech textToSpeechInstance = TextToSpeech();
 
   void initializeSpeechToText() async {
     await speechToTextInstance.initialize();
@@ -40,20 +51,76 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void onSpeechToTextResult(SpeechRecognitionResult recognitionResult) {
     recordedAudioString = recognitionResult.recognizedWords;
+
     speechToTextInstance.isListening
         ? null
-        : sendRequestToOpenAI((recordedAudioString));
+        : sendRequestToOpenAI(recordedAudioString);
+
     print("Speech Result:");
     print(recordedAudioString);
   }
 
   Future<void> sendRequestToOpenAI(String userInput) async {
     stopListeningNow();
+
     setState(() {
       isLoading = true;
     });
 
-    //send request to openai
+    //send the request to openAI using our APIService
+    await APIService().requestOpenAI(userInput, modeOpenAI, 2000).then((value) {
+      setState(() {
+        isLoading = false;
+      });
+
+      if (value.statusCode == 401) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              "Api Key you are/were using expired or it is not working anymore.",
+            ),
+          ),
+        );
+      }
+
+      userInputTextEditingController.clear();
+
+      final responseAvailable = jsonDecode(value.body);
+
+      if (modeOpenAI == "chat") {
+        setState(() {
+          answerTextFromOpenAI = utf8.decode(
+              responseAvailable["choices"][0]["text"].toString().codeUnits);
+
+          print("ChatGPT Chatbot: ");
+          print(answerTextFromOpenAI);
+        });
+
+        if (speakFRIDAY == true) {
+          textToSpeechInstance.speak(answerTextFromOpenAI);
+        }
+      } else {
+        //image generation
+        setState(() {
+          imageUrlFromOpenAI = responseAvailable["data"][0]["url"];
+
+          print("Generated Dale E Image Url: ");
+          print(imageUrlFromOpenAI);
+        });
+      }
+    }).catchError((errorMessage) {
+      setState(() {
+        isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            "Error: " + errorMessage.toString(),
+          ),
+        ),
+      );
+    });
   }
 
   @override
@@ -68,11 +135,24 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.white,
-        onPressed: () {},
-        child: Padding(
-          padding: const EdgeInsets.all(4.0),
-          child: Image.asset("images/sound.png"),
-        ),
+        onPressed: () {
+          if (!isLoading) {
+            setState(() {
+              speakFRIDAY = !speakFRIDAY;
+            });
+          }
+
+          textToSpeechInstance.stop();
+        },
+        child: speakFRIDAY
+            ? Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Image.asset("images/sound.png"),
+              )
+            : Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Image.asset("images/mute.png"),
+              ),
       ),
       appBar: AppBar(
         flexibleSpace: Container(
@@ -93,11 +173,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 4, top: 4),
             child: InkWell(
-              onTap: () {},
-              child: const Icon(
+              onTap: () {
+                setState(() {
+                  modeOpenAI = "chat";
+                });
+              },
+              child: Icon(
                 Icons.chat,
                 size: 40,
-                color: Colors.white,
+                color: modeOpenAI == "chat" ? Colors.white : Colors.grey,
               ),
             ),
           ),
@@ -106,11 +190,15 @@ class _HomeScreenState extends State<HomeScreen> {
           Padding(
             padding: const EdgeInsets.only(right: 8, left: 4),
             child: InkWell(
-              onTap: () {},
-              child: const Icon(
+              onTap: () {
+                setState(() {
+                  modeOpenAI = "image";
+                });
+              },
+              child: Icon(
                 Icons.image,
                 size: 40,
-                color: Colors.white,
+                color: modeOpenAI == "image" ? Colors.white : Colors.grey,
               ),
             ),
           ),
@@ -180,7 +268,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   //button
                   InkWell(
                     onTap: () {
-                      print("send user input");
+                      if (userInputTextEditingController.text.isNotEmpty) {
+                        sendRequestToOpenAI(
+                            userInputTextEditingController.text.toString());
+                      }
                     },
                     child: AnimatedContainer(
                       padding: const EdgeInsets.all(15),
@@ -200,6 +291,59 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(
+                height: 24,
+              ),
+
+              //display result
+              modeOpenAI == "chat"
+                  ? SelectableText(
+                      answerTextFromOpenAI,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        color: Colors.black,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : modeOpenAI == "image" && imageUrlFromOpenAI.isNotEmpty
+                      ? Column(
+                          //image
+                          children: [
+                            Image.network(
+                              imageUrlFromOpenAI,
+                            ),
+                            const SizedBox(
+                              height: 14,
+                            ),
+                            ElevatedButton(
+                              onPressed: () async {
+                                String? imageStatus =
+                                    await ImageDownloader.downloadImage(
+                                        imageUrlFromOpenAI);
+
+                                if (imageStatus != null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          "Image downloaded Successfully."),
+                                    ),
+                                  );
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepPurple,
+                              ),
+                              child: const Text(
+                                "Download this Image",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Container()
             ],
           ),
         ),

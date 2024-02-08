@@ -1,5 +1,5 @@
-import 'package:cheche_virtual_assistant/screens/home_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:friday_virtual_assistant/screens/home_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,12 +14,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'OpenAI ChatGpt Dale-E',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+        primarySwatch: Colors.blue,
       ),
+      debugShowCheckedModeBanner: false,
       home: HomeScreen(),
     );
   }
